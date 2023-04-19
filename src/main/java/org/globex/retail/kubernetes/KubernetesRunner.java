@@ -76,6 +76,8 @@ public class KubernetesRunner {
 
         String clientPropertiesName = System.getenv().getOrDefault("AMQ_CLIENT_PROPERTIES", "amq.properties");
 
+        String amqBrokerServiceDnsName = amqBrokerService + "." + namespace +".svc";
+
         // create broker private key and certificate
         X509Certificate certificate;
         KeyPair keyPair;
@@ -85,7 +87,7 @@ public class KubernetesRunner {
             // create certificate
             Instant validFrom = Instant.now();
             Instant validUntil = validFrom.plus(365, ChronoUnit.DAYS);
-            X500Name x500Name = new X500Name("C = US, O = Apache, OU = Qpid, CN = " + amqBrokerService + "." + namespace +".svc");
+            X500Name x500Name = new X500Name("C = US, O = Apache, OU = Qpid, CN = " + amqBrokerServiceDnsName);
             ContentSigner signer = new JcaContentSignerBuilder("SHA256WithRSAEncryption").build(keyPair.getPrivate());
             X509v3CertificateBuilder certificateBuilder = new JcaX509v3CertificateBuilder(x500Name, BigInteger.valueOf(System.currentTimeMillis()),
                     Date.from(validFrom), Date.from(validUntil), x500Name, keyPair.getPublic())
@@ -152,8 +154,8 @@ public class KubernetesRunner {
 
         // AMQ client secret
         String clientProperties = """
-                broker.amqp.transport.ts.password = %s
-                """.formatted(truststorePassword);
+                broker.amqp.uri=amqps://%s:5671?sslEnabled=true&transport.trustStoreLocation=/etc/camel/conf.d/_secrets/client-amq/client-amq.ts&transport.trustStorePassword=%s
+                """.formatted(amqBrokerServiceDnsName, truststorePassword);
 
         Secret clientSecret = new SecretBuilder().withNewMetadata().withName(clientSecretName).endMetadata().withType("Opaque")
                 .addToData(truststoreName, Base64.getEncoder().encodeToString(tsBytes))
